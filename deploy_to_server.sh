@@ -12,7 +12,7 @@ LOCAL_PROJECT_DIR="${LOCAL_PROJECT_DIR:-$HOME/server/}"
 
 # Remote Directory to sync to (远端存放路径)
 # Default: $HOME/server/
-REMOTE_PROJECT_DIR="${REMOTE_PROJECT_DIR:-$HOME/server/}"
+REMOTE_PROJECT_DIR="${REMOTE_PROJECT_DIR:-/data/nvme_data/rec_ws/server/}"
 
 # Local temporary directory root (本地临时目录)
 # Default: $HOME/Public/
