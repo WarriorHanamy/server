@@ -1,11 +1,11 @@
 build-sim:
     docker build -f docker/isaacsim5.dockerfile \
     --network=host \
-    -t lab2.3-sim5.1:v0 .
+    -t {{env_var("USER")}}-lab2.3-sim5.1:v0 .
 
 
 run-sim:
-    docker run --name lab2.3-sim5.1 -itd --privileged --gpus all --network host \
+    docker run --name {{env_var("USER")}}-lab2.3-sim5.1 -itd --privileged --gpus all --network host \
     --entrypoint bash \
     --runtime=nvidia \
     -e ACCEPT_EULA=Y -e PRIVACY_CONSENT=Y \
@@ -23,17 +23,17 @@ run-sim:
     -v ${HOME}/server/.git:/workspace/.git \
     -v ${HOME}/server/rsl_rl:/workspace/rsl_rl \
     -v ${HOME}/server/drone_racer:/workspace/drone_racer \
-    lab2.3-sim5.1:v0
+    {{env_var("USER")}}-lab2.3-sim5.1:v0
 
 exec-sim:
-    docker exec -it lab2.3-sim5.1 /bin/bash
+    docker exec -it {{env_var("USER")}}-lab2.3-sim5.1 /bin/bash
 
 stop-sim:
-    docker stop lab2.3-sim5.1 || true && \
-    docker rm lab2.3-sim5.1 || true
+    docker stop {{env_var("USER")}}-lab2.3-sim5.1 || true && \
+    docker rm {{env_var("USER")}}-lab2.3-sim5.1 || true
 
 start:
-    docker restart lab2.3-sim5.1:v0
+    docker restart {{env_var("USER")}}-lab2.3-sim5.1:v0
 
 alias b := build-sim
 alias r := run-sim
