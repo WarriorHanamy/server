@@ -38,8 +38,30 @@ log() {
 }
 
 if [ "$#" -lt 1 ]; then
-  echo "Usage: $(basename "$0") <target-server>"
-  echo "Please carefully set LOCAL_PROJECT_DIR, REMOTE_PROJECT_DIR, CONTAINER_NAME, and IMAGE_NAME environment variables as needed."
+  cat <<EOF
+Usage: $(basename "$0") <target-server>
+
+Arguments:
+  target-server    Remote server name (rec-server, wu, ali)
+
+Environment Variables:
+  LOCAL_PROJECT_DIR    Local project path to sync
+                       Default: \$HOME/server/
+  REMOTE_PROJECT_DIR   Remote destination path
+                       Default: /data/nvme_data/rec_ws/server/
+  LOCAL_TMP_DIR        Local temporary directory root
+                       Default: \$HOME/Public/
+  CONTAINER_NAME       Container name to commit and deploy
+                       Default: rec-lab2.3-sim5.1
+  IMAGE_NAME           Image name for the committed container
+                       Default: rec-lab2.3-sim5.1
+  SSH_KEY_PATH         SSH key path for authentication
+                       Default: \$HOME/.ssh/id_ed25519
+
+Example:
+  $(basename "$0") rec-server
+  CONTAINER_NAME=my-container IMAGE_NAME=my-image $(basename "$0") rec-server
+EOF
   exit 1
 fi
 
@@ -110,6 +132,27 @@ log "  Container Name:   ${CONTAINER_NAME}"
 log "  Full Image Name on Server:  ${FULL_IMAGE_NAME}"
 log "  Local Archive Temp Dir: ${LOCAL_ARCHIVE_TMP_DIR}"
 log "  ssh Key Path:    ${SSH_KEY_PATH}"
+
+# --- Confirmation Prompt (确认提示) ---
+echo ""
+echo "================================================================================"
+echo "  WARNING: This will perform destructive operations on ${TARGET_SERVER}:"
+echo "================================================================================"
+echo "  - Remove remote directory: ${REMOTE_PROJECT_DIR}"
+echo "  - Stop and remove container: ${CONTAINER_NAME}"
+echo "  - Remove Docker image: ${FULL_IMAGE_NAME}"
+echo ""
+echo "  The following will be deployed:"
+echo "  - Docker image from local container: ${CONTAINER_NAME}"
+echo "  - Project code from: ${LOCAL_PROJECT_DIR}"
+echo "================================================================================"
+echo ""
+read -p "Do you want to proceed? (yes/no): " confirmation
+if [ "$confirmation" != "yes" ]; then
+  echo "Deployment cancelled."
+  exit 0
+fi
+echo ""
 
 # --- 0. Remote Preparation (远端准备工作) ---
 log "0. Preparing remote server ${TARGET_SERVER}..."
@@ -303,30 +346,6 @@ if docker ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
   docker rm "$CONTAINER_NAME" >/dev/null
   echo "  -> Removed remote container: $CONTAINER_NAME"
 fi
-
-# Start new container with Isaac Sim volumes
-docker run --name "$CONTAINER_NAME" -itd --privileged --gpus all --network host \
-  --entrypoint bash \
-  -e ACCEPT_EULA=Y -e PRIVACY_CONSENT=Y \
-  -v "$HOME/docker/isaac-sim/cache/kit:/isaac-sim/kit/cache:rw" \
-  -v "$HOME/docker/isaac-sim/cache/ov:/root/.cache/ov:rw" \
-  -v "$HOME/docker/isaac-sim/cache/pip:/root/.cache/pip:rw" \
-  -v "$HOME/docker/isaac-sim/cache/glcache:/root/.cache/nvidia/GLCache:rw" \
-  -v "$HOME/docker/isaac-sim/cache/computecache:/root/.nv/ComputeCache:rw" \
-  -v "$HOME/docker/isaac-sim/logs:/root/.nvidia-omniverse/logs:rw" \
-  -v "$HOME/docker/isaac-sim/data:/root/.local/share/ov/data:rw" \
-  -v "$HOME/docker/isaac-sim/documents:/root/Documents:rw" \
-  -v "${REMOTE_PROJECT_DIR%/}/.git:/workspace/.git" \
-  -v "${REMOTE_PROJECT_DIR%/}/rsl_rl:/workspace/rsl_rl" \
-  -v "${REMOTE_PROJECT_DIR%/}/drone_racer:/workspace/drone_racer" \
-  "$FULL_IMAGE_NAME"
-
-# Verify container is running
-if ! docker ps --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
-  echo "Error: Container failed to start: $CONTAINER_NAME" >&2
-  exit 1
-fi
-echo "  -> Container started successfully: $CONTAINER_NAME"
 
 # Cleanup archives
 rm -f "$IMAGE_ARCHIVE_PATH" "$PROJECT_ARCHIVE_PATH"

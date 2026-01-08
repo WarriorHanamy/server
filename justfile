@@ -1,7 +1,16 @@
+project_root := justfile_directory()
+hostname := `hostname`
+TAG_NAME := if hostname == "dcj" { "train-server-ali" } else if hostname == "rec-MS-7E30" { "v0" } else { "v0" }
+tmp_dirname := `cd .. && pwd`
+SERVER_LOGS_DIR := tmp_dirname + "/server_logs"
+
+elogs:
+    echo "SERVER_LOGS_DIR: {{SERVER_LOGS_DIR}}"
+
 build-sim:
     docker build -f docker/isaacsim5.dockerfile \
     --network=host \
-    -t {{env_var("USER")}}-lab2.3-sim5.1:v0 .
+    -t {{env_var("USER")}}-lab2.3-sim5.1:{{TAG_NAME}} .
 
 
 run-sim:
@@ -10,6 +19,7 @@ run-sim:
     --runtime=nvidia \
     -e ACCEPT_EULA=Y -e PRIVACY_CONSENT=Y \
     -e DISPLAY -e QT_X11_NO_MITSHM=1 \
+    -e PYTHONDONTWRITEBYTECODE=1 \
     -v $HOME/.Xauthority:/root/.Xauthority \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v ~/docker/isaac-sim5.1/cache/kit:/isaac-sim/kit/cache:rw \
@@ -20,10 +30,12 @@ run-sim:
     -v ~/docker/isaac-sim5.1/logs:/root/.nvidia-omniverse/logs:rw \
     -v ~/docker/isaac-sim5.1/data:/root/.local/share/ov/data:rw \
     -v ~/docker/isaac-sim5.1/documents:/root/Documents:rw \
-    -v ${HOME}/server/.git:/workspace/.git \
-    -v ${HOME}/server/rsl_rl:/workspace/rsl_rl \
-    -v ${HOME}/server/drone_racer:/workspace/drone_racer \
-    {{env_var("USER")}}-lab2.3-sim5.1:v0
+    -v {{project_root}}/.git:/workspace/.git \
+    -v {{project_root}}/rsl_rl:/workspace/rsl_rl \
+    -v {{project_root}}/drone_racer:/workspace/drone_racer \
+    -v {{SERVER_LOGS_DIR}}:/root/server_logs:rw \
+    -v {{SERVER_LOGS_DIR}}/outputs:/workspace/drone_racer/outputs:rw \
+    {{env_var("USER")}}-lab2.3-sim5.1:{{TAG_NAME}}
 
 exec-sim:
     docker exec -it {{env_var("USER")}}-lab2.3-sim5.1 /bin/bash
@@ -33,7 +45,7 @@ stop-sim:
     docker rm {{env_var("USER")}}-lab2.3-sim5.1 || true
 
 start:
-    docker restart {{env_var("USER")}}-lab2.3-sim5.1:v0
+    docker restart {{env_var("USER")}}-lab2.3-sim5.1:{{TAG_NAME}}
 
 alias b := build-sim
 alias r := run-sim

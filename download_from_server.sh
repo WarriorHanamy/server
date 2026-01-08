@@ -9,7 +9,7 @@ set -euo pipefail
 # Default local parent directory for saving logs
 DEFAULT_LOCAL_PARENT_DIR="$HOME/server_logs"
 # Default remote path if not specified as the 2nd argument
-DEFAULT_REMOTE_LOG_DIR="/data/nvme_data/dzp_is_sb/zuanfeng/logs"
+DEFAULT_REMOTE_LOG_DIR="/data/nvme_data/rec_ws/server_logs/drone_racer/logs"
 # SSH key path for authentication (SSH密钥路径)
 # Default: ~/.ssh/id_ed25519
 DEFAULT_SSH_KEY_PATH="$HOME/.ssh/id_ed25519"
@@ -18,18 +18,28 @@ SSH_KEY_PATH="${SSH_KEY_PATH:-$DEFAULT_SSH_KEY_PATH}"
 usage() {
   # Use ${0##*/} to get the script name only
   SCRIPT_NAME="${0##*/}"
-  
+
   cat <<EOF
 Usage: $SCRIPT_NAME <HOST> [REMOTE_PATH]
 
 Arguments:
   HOST          The hostname or IP address.
-  REMOTE_PATH   (Optional) Path to logs on remote. 
+  REMOTE_PATH   (Optional) Path to logs on remote.
                 Defaults to: $DEFAULT_REMOTE_LOG_DIR
 
+Environment Variables:
+  SSH_KEY_PATH            SSH key path for authentication
+                          Default: \$HOME/.ssh/id_ed25519
+  DEFAULT_LOCAL_PARENT_DIR
+                          Default local parent directory for saving logs
+                          Default: \$HOME/server_logs
+  DEFAULT_REMOTE_LOG_DIR  Default remote path if not specified as 2nd argument
+                          Default: $DEFAULT_REMOTE_LOG_DIR
+
 Example:
-  $SCRIPT_NAME rec-22
-  $SCRIPT_NAME rec-22 /tmp/custom_logs
+  $SCRIPT_NAME rec-server
+  $SCRIPT_NAME rec-server /tmp/custom_logs
+  SSH_KEY_PATH=/custom/key $SCRIPT_NAME rec-server
 EOF
   exit 1
 }
