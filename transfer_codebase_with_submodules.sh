@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #
 # Creates a git diff patch from current workspace and deploys it to a remote server.
+# This version supports GIT SUBMODULES - it detects, patches, and applies changes
+# in both the main repository and all submodules.
 #
 # ======================================================================================
 # CONFIGURATION (Environment Variables)
@@ -186,6 +188,57 @@ commit_exists_in_local() {
   return 1
 }
 
+# Detect submodules with changes (commit hash or uncommitted files)
+# Returns list of changed submodule paths
+detect_changed_submodules() {
+  local baseline="$1"
+  local changed_submodules=()
+
+  # Check if .gitmodules exists
+  if [ ! -f .gitmodules ]; then
+    # No submodules in this repository
+    return 0
+  fi
+
+  # Get list of all submodules
+  local submodule_paths
+  submodule_paths="$(git config --file .gitmodules --get-regexp path 2>/dev/null | awk '{print $2}')"
+
+  if [ -z "$submodule_paths" ]; then
+    return 0
+  fi
+
+  for submodule_path in $submodule_paths; do
+    local has_changes=false
+
+    # Check 1: Submodule commit hash changed vs baseline
+    local old_commit new_commit
+    old_commit="$(git ls-tree "$baseline" "$submodule_path" 2>/dev/null | awk '{print $3}')"
+    new_commit="$(git ls-tree HEAD "$submodule_path" 2>/dev/null | awk '{print $3}')"
+
+    if [ "$old_commit" != "$new_commit" ]; then
+      has_changes=true
+      echo "  Submodule commit changed: $submodule_path (${old_commit:0:8} -> ${new_commit:0:8})" >&2
+    fi
+
+    # Check 2: Uncommitted changes within submodule
+    if [ -d "$submodule_path/.git" ]; then
+      if ! git -C "$submodule_path" diff --quiet 2>/dev/null || \
+         ! git -C "$submodule_path" diff --cached --quiet 2>/dev/null; then
+        has_changes=true
+        echo "  Uncommitted changes in: $submodule_path" >&2
+      fi
+    fi
+
+    if $has_changes; then
+      changed_submodules+=("$submodule_path")
+    fi
+  done
+
+  # Return list (one per line)
+  printf '%s\n' "${changed_submodules[@]}"
+}
+
 # ======================================================================================
 
 # Generate patch filename
@@ -258,42 +311,120 @@ log ""
 
 # ======================================================================================
 
-# --- 1. Create Git Diff Patch ---
-log "1. Creating git diff patch: ${LOCAL_PROJECT_DIR} vs ${BASELINE_COMMIT}..."
+# --- 1. Detect Submodule Changes ---
+log "1. Detecting submodule changes..."
+CHANGED_SUBMODULES=()
+while IFS= read -r submodule; do
+  [ -n "$submodule" ] && CHANGED_SUBMODULES+=("$submodule")
+done < <(detect_changed_submodules "${BASELINE_COMMIT}")
 
-# Check if there are any changes
+if [ ${#CHANGED_SUBMODULES[@]} -gt 0 ]; then
+  log_success "Found ${#CHANGED_SUBMODULES[@]} changed submodules: ${CHANGED_SUBMODULES[*]}"
+else
+  log "No submodule changes detected"
+fi
+
+# --- 2. Create Patch Bundle Directory ---
+PATCH_DIR="${LOCAL_TMP_DIR%/}/patch_bundle_${TIMESTAMP}"
+mkdir -p "$PATCH_DIR"
+
+# --- 3. Create Main Repository Patch ---
+log "2. Creating git diff patch for main repository..."
+
+# Check if there are any changes in main repo (excluding submodules)
 if git diff --quiet "${BASELINE_COMMIT}" 2>/dev/null; then
-  log_error "No changes detected between workspace and commit ${BASELINE_COMMIT}"
-  exit 1
+  log_warning "No changes detected in main repository"
+  # Create empty main.patch for consistency
+  touch "$PATCH_DIR/main.patch"
+else
+  # Create the patch (exclude submodule directory changes)
+  git diff "${BASELINE_COMMIT}" > "$PATCH_DIR/main.patch"
+
+  # Verify patch was created and is not empty
+  if [ ! -s "$PATCH_DIR/main.patch" ]; then
+    log_error "Failed to create main repository patch"
+    exit 1
+  fi
+
+  MAIN_PATCH_SIZE="$(du -h "$PATCH_DIR/main.patch" | cut -f1)"
+  log_success "Main patch created (${MAIN_PATCH_SIZE})"
 fi
 
-# Create the patch
-git diff "${BASELINE_COMMIT}" > "$LOCAL_PATCH_PATH"
+# --- 4. Create Submodule Patches ---
+for submodule in "${CHANGED_SUBMODULES[@]}"; do
+  log "Creating patch for submodule: $submodule"
 
-# Verify patch was created and is not empty
-if [ ! -s "$LOCAL_PATCH_PATH" ]; then
-  log_error "Failed to create patch or patch is empty"
-  exit 1
-fi
+  # Determine baseline for submodule (commit recorded in baseline)
+  local old_submodule_commit
+  old_submodule_commit="$(git ls-tree "${BASELINE_COMMIT}" "$submodule" 2>/dev/null | awk '{print $3}')"
 
-PATCH_SIZE="$(du -h "$LOCAL_PATCH_PATH" | cut -f1)"
-log_success "Patch created successfully (${PATCH_SIZE}): ${LOCAL_PATCH_PATH}"
+  if [ -z "$old_submodule_commit" ]; then
+    log_warning "  No previous commit recorded for $submodule, using HEAD~1"
+    old_submodule_commit="HEAD~1"
+  fi
 
-# Show summary of changes
+  # Create patch within submodule
+  local patch_name="${submodule##*/}.patch"
+  local patch_path="$PATCH_DIR/$patch_name"
+
+  if ! git -C "$submodule" diff "${old_submodule_commit}" > "$patch_path" 2>/dev/null; then
+    log_warning "  Failed to create patch for $submodule"
+    rm -f "$patch_path"
+    continue
+  fi
+
+  if [ -s "$patch_path" ]; then
+    local patch_size
+    patch_size="$(du -h "$patch_path" | cut -f1)"
+    log_success "  Submodule patch created: $patch_name (${patch_size})"
+  else
+    log_warning "  No actual changes in $submodule, skipping patch"
+    rm -f "$patch_path"
+  fi
+done
+
+# --- 5. Create Manifest and Bundle ---
+cat > "$PATCH_DIR/MANIFEST.txt" <<EOF
+Patch Bundle Manifest
+=====================
+Timestamp: ${TIMESTAMP}
+Baseline Commit: ${BASELINE_COMMIT}
+Main Repository: main.patch
+Submodules:
+$(for sm in "${CHANGED_SUBMODULES[@]}"; do
+  if [ -f "$PATCH_DIR/${sm##*/}.patch" ]; then
+    echo "  - $sm: ${sm##*/}.patch"
+  fi
+done)
+EOF
+
+# Create bundle archive
+log "5. Creating patch bundle archive..."
+cd "$PATCH_DIR/.."
+tar -czf "${LOCAL_PATCH_PATH}" "patch_bundle_${TIMESTAMP}"
+cd "$LOCAL_PROJECT_DIR"
+rm -rf "$PATCH_DIR"
+
+BUNDLE_SIZE="$(du -h "$LOCAL_PATCH_PATH" | cut -f1)"
+log_success "Patch bundle created (${BUNDLE_SIZE}): ${LOCAL_PATCH_PATH}"
+
+# --- 6. Show Summary of Changes ---
 log "Summary of changes:"
 git diff --stat "${BASELINE_COMMIT}" | sed 's/^/      /'
 
-# --- 2. Upload Patch to Remote Server ---
-log "2. Uploading patch to ${TARGET_SERVER}:${REMOTE_PATCH_PATH}..."
+# ======================================================================================
+
+# --- 6. Upload Patch Bundle to Remote Server ---
+log "6. Uploading patch bundle to ${TARGET_SERVER}:${REMOTE_PATCH_PATH}..."
 scp -i "$SSH_KEY_PATH" "$LOCAL_PATCH_PATH" "${TARGET_SERVER}:${REMOTE_PATCH_PATH}"
 log_success "Patch uploaded successfully"
 
-# --- 3. Apply Patch on Remote Server ---
-log "3. Applying patch on remote server..."
+# --- 7. Apply Patch Bundle on Remote Server ---
+log "7. Applying patch bundle on remote server..."
 REMOTE_OUTPUT="$(ssh -i "$SSH_KEY_PATH" "$TARGET_SERVER" \
-  "PATCH_FILE='${PATCH_NAME}' \
+  "PATCH_BUNDLE='${REMOTE_PATCH_PATH}' \
    REMOTE_PROJECT_DIR='${REMOTE_PROJECT_DIR}' \
-   PATCH_PATH='${REMOTE_PATCH_PATH}' \
+   BASELINE_COMMIT='${BASELINE_COMMIT}' \
    AUTO_COMMIT_REMOTE='${AUTO_COMMIT_REMOTE}' \
    COLOR_GREEN='\033[0;32m' \
    COLOR_RED='\033[0;31m' \
@@ -329,9 +460,9 @@ cd "${REMOTE_PROJECT_DIR%/}" || {
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
   log_error "Remote directory is not a git repository: ${REMOTE_PROJECT_DIR}"
   exit 1
-fi
+}
 
-# Check git status - if uncommitted changes exist, reset them (server should not be modified directly)
+# Check git status - if uncommitted changes exist, reset them
 if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
   log_warning "Remote working directory has uncommitted changes"
   log "Resetting remote workspace (git reset --hard)..."
@@ -339,38 +470,140 @@ if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; th
   log_success "Remote workspace reset to clean state"
 fi
 
-# Apply the patch
-log "Applying patch with git apply..."
-APPLY_OUTPUT="$(git apply --check "$PATCH_PATH" 2>&1)" || true
-APPLY_EXIT=$?
-
-if [ $APPLY_EXIT -eq 0 ]; then
-  git apply "$PATCH_PATH"
-  log_success "Patch applied successfully"
-
-  # Show what changed
-  log "Summary of applied changes:"
-  git diff --stat | sed 's/^/    /'
-
-  # Auto-commit if requested
-  if [ "$AUTO_COMMIT_REMOTE" = "true" ]; then
-    log "Auto-committing changes on remote..."
-    # Add all changes including new files
-    git add -A
-    git commit -m "Deployed from local via transfer_codebase_by_git_diff.sh"
-    log_success "Changes committed on remote"
-  fi
-else
-  log_error "Patch does not apply cleanly to remote repository"
-  log ""
-  log "git apply --check output:"
-  printf '%s\n' "$APPLY_OUTPUT" | sed 's/^/    /'
+# Extract patch bundle
+EXTRACT_DIR="$(dirname "${REMOTE_PROJECT_DIR%/}")/patch_extract_$$"
+mkdir -p "$EXTRACT_DIR"
+log "Extracting patch bundle to: $EXTRACT_DIR"
+tar -xzf "$PATCH_BUNDLE" -C "$EXTRACT_DIR" || {
+  log_error "Failed to extract patch bundle"
   exit 1
+}
+
+# Show manifest if available
+if [ -f "$EXTRACT_DIR/MANIFEST.txt" ]; then
+  log "Patch bundle manifest:"
+  cat "$EXTRACT_DIR/MANIFEST.txt" | sed 's/^/  /'
 fi
 
-# Remove the patch file after successful application
-rm -f "$PATCH_PATH"
-log_success "Patch file removed: ${PATCH_PATH}"
+# Apply main repository patch
+MAIN_PATCH="$EXTRACT_DIR/main.patch"
+if [ -f "$MAIN_PATCH" ]; then
+  log "Applying main repository patch..."
+  if [ -s "$MAIN_PATCH" ]; then
+    APPLY_OUTPUT="$(git apply --check "$MAIN_PATCH" 2>&1)" || true
+    APPLY_EXIT=$?
+
+    if [ $APPLY_EXIT -eq 0 ]; then
+      git apply "$MAIN_PATCH"
+      log_success "Main patch applied successfully"
+    else
+      log_error "Main patch does not apply cleanly"
+      log "git apply --check output:"
+      printf '%s\n' "$APPLY_OUTPUT" | sed 's/^/    /'
+      exit 1
+    fi
+  else
+    log "Main patch is empty, skipping"
+  fi
+fi
+
+# Initialize submodules if any exist
+if [ -f .gitmodules ]; then
+  log "Initializing submodules..."
+  git submodule update --init --recursive 2>/dev/null || true
+  log_success "Submodules initialized"
+fi
+
+# Apply submodule patches
+for patch_file in "$EXTRACT_DIR"/*.patch; do
+  # Skip main.patch and MANIFEST.txt
+  [ "$(basename "$patch_file")" = "main.patch" ] && continue
+  [ "$(basename "$patch_file")" = "MANIFEST.txt" ] && continue
+  [ ! -f "$patch_file" ] && continue
+
+  # Extract submodule name from patch filename
+  submodule_name="$(basename "$patch_file" .patch)"
+  log "Applying patch for submodule: $submodule_name"
+
+  # Find the submodule path
+  submodule_path=""
+  if git config --file .gitmodules --get-regexp path >/dev/null 2>&1; then
+    for sm_path in $(git config --file .gitmodules --get-regexp path | awk '{print $2}'); do
+      if [ "$(basename "$sm_path")" = "$submodule_name" ]; then
+        submodule_path="$sm_path"
+        break
+      fi
+    done
+  fi
+
+  if [ -z "$submodule_path" ]; then
+    log_warning "  Could not find submodule path for: $submodule_name"
+    continue
+  fi
+
+  # Check if submodule directory exists
+  if [ ! -d "$submodule_path" ]; then
+    log_warning "  Submodule directory not found: $submodule_path"
+    continue
+  fi
+
+  # Apply patch within submodule
+  cd "$submodule_path" || {
+    log_warning "  Cannot enter $submodule_path, skipping"
+    cd "${REMOTE_PROJECT_DIR%/}"
+    continue
+  }
+
+  # Check if submodule is a valid git repo
+  if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    log_warning "  Not a valid git repository: $submodule_path"
+    cd "${REMOTE_PROJECT_DIR%/}"
+    continue
+  fi
+
+  # Check and apply patch
+  APPLY_OUTPUT="$(git apply --check "$patch_file" 2>&1)" || true
+  APPLY_EXIT=$?
+
+  if [ $APPLY_EXIT -eq 0 ]; then
+    git apply "$patch_file"
+    log_success "  Submodule patch applied: $submodule_name"
+  else
+    log_warning "  Submodule patch does not apply cleanly to $submodule_name"
+    log "  git apply --check output:"
+    printf '%s\n' "$APPLY_OUTPUT" | sed 's/^/    /'
+  fi
+
+  cd "${REMOTE_PROJECT_DIR%/}"
+done
+
+# Update submodule references in main repo
+if [ -f .gitmodules ]; then
+  log "Updating submodule references..."
+  for submodule_path in $(git config --file .gitmodules --get-regexp path | awk '{print $2}'); do
+    if [ -d "$submodule_path/.git" ]; then
+      git add "$submodule_path"
+    fi
+  done
+  log_success "Submodule references updated"
+fi
+
+# Show changes
+log "Summary of applied changes:"
+git diff --stat | sed 's/^/    /'
+
+# Auto-commit if requested
+if [ "$AUTO_COMMIT_REMOTE" = "true" ]; then
+  log "Auto-committing changes on remote..."
+  git add -A
+  git commit -m "Deployed from local via transfer_codebase_with_submodules.sh"
+  log_success "Changes committed on remote"
+fi
+
+# Cleanup
+rm -rf "$EXTRACT_DIR"
+rm -f "$PATCH_BUNDLE"
+log_success "Cleanup completed"
 
 EOF
 )" || true
@@ -379,25 +612,14 @@ if [ -n "$REMOTE_OUTPUT" ]; then
   printf '%s\n' "$REMOTE_OUTPUT"
 fi
 
-# Check if SSH command succeeded
-if [ "${PIPESTATUS[0]}" -ne 0 ] 2>/dev/null || [ ! -s "$REMOTE_OUTPUT" ]; then
-  # Check if remote patch file still exists (indicates failure)
-  if ssh -i "$SSH_KEY_PATH" "$TARGET_SERVER" "test -f '$REMOTE_PATCH_PATH'" 2>/dev/null; then
-    log_warning "Remote patch application may have failed"
-    log "You can check manually on $TARGET_SERVER:"
-    log "  cd $REMOTE_PROJECT_DIR"
-    log "  git apply --check $REMOTE_PATCH_PATH"
-  fi
-fi
-
-# --- 4. Cleanup Local Patch ---
-log "4. Cleaning up local patch file..."
+# --- 6. Cleanup Local Patch ---
+log "6. Cleaning up local patch file..."
 rm -f "$LOCAL_PATCH_PATH"
 log_success "Removed local patch: ${LOCAL_PATCH_PATH}"
 
-# --- 5. Get Remote HEAD After Deployment ---
+# --- 7. Get Remote HEAD After Deployment ---
 log ""
-log "5. Verifying remote state..."
+log "7. Verifying remote state..."
 
 # Get remote HEAD and verify it
 REMOTE_HEAD_AFTER=""
