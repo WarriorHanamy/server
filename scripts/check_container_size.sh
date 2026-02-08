@@ -3,15 +3,19 @@
 # Diagnostic script to identify what's making docker commit slow
 #
 
+# Source common logging functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/common/log_funcs.sh"
+
 if [ "$#" -lt 1 ]; then
-  echo "Usage: $(basename "$0") <container-name>"
+  log_error "Usage: $(basename "$0") <container-name>"
   exit 1
 fi
 
 CONTAINER_NAME="$1"
 
-echo "=== Analyzing container: $CONTAINER_NAME ==="
-echo
+log "=== Analyzing container: $CONTAINER_NAME ==="
+log ""
 
 # 1. Check container size (if docker reports it)
 echo "1. Container size info:"

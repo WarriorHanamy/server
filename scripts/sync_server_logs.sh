@@ -3,6 +3,10 @@
 # Only adds new/updated files, never deletes local files (incremental sync).
 # Uses same configuration as transfer_codebase.sh for consistency.
 
+# Source common logging functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/common/log_funcs.sh"
+
 set -uo pipefail  # Removed -e to prevent exit on errors
 
 # --- Configuration ---
@@ -24,29 +28,6 @@ SYNC_INTERVAL="${SYNC_INTERVAL:-10}"
 
 # Construct target server from REMOTE_USER and SERVER_IP
 TARGET_SERVER="${REMOTE_USER}@${SERVER_IP}"
-
-# --- Colors for output ---
-COLOR_GREEN='\033[0;32m'
-COLOR_BLUE='\033[0;34m'
-COLOR_YELLOW='\033[0;33m'
-COLOR_RED='\033[0;31m'
-COLOR_RESET='\033[0m'
-
-log() {
-  printf "${COLOR_BLUE}[%s]${COLOR_RESET} %s\n" "$(date '+%H:%M:%S')" "$*"
-}
-
-log_success() {
-  printf "${COLOR_GREEN}[%s] ✓ %s${COLOR_RESET}\n" "$(date '+%H:%M:%S')" "$*"
-}
-
-log_warning() {
-  printf "${COLOR_YELLOW}[%s] ⚠ %s${COLOR_RESET}\n" "$(date '+%H:%M:%S')" "$*"
-}
-
-log_error() {
-  printf "${COLOR_RED}[%s] ✗ %s${COLOR_RESET}\n" "$(date '+%H:%M:%S')" "$*" >&2
-}
 
 usage() {
   SCRIPT_NAME="${0##*/}"
