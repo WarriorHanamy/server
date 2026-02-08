@@ -89,7 +89,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     *)
-      echo "Error: Unknown option: $1" >&2
+      log_error "Unknown option: $1"
       usage
       ;;
   esac
@@ -154,7 +154,7 @@ sync_logs() {
     
     # Parse rsync stats to see if anything was transferred
     if grep -q "Number of files transferred: 0" /tmp/rsync_output.txt 2>/dev/null; then
-      echo -e "${COLOR_BLUE}[$(date '+%H:%M:%S')]${COLOR_RESET} No changes detected"
+      log "No changes detected"
     else
       log_success "Sync completed"
     fi
@@ -199,7 +199,7 @@ MAX_CONSECUTIVE_FAILURES=5
 while true; do
   sleep "$SYNC_INTERVAL"
   ((SYNC_COUNT++))
-  echo "" # Add blank line for readability
+  log "" # Add blank line for readability
   log "--- Sync #${SYNC_COUNT} ---"
   
   if sync_logs; then

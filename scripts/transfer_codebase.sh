@@ -96,22 +96,22 @@ log "  SSH Key:         ${SSH_KEY_PATH}"
 log ""
 
 # --- Confirmation Prompt (确认提示) ---
-echo ""
-echo "================================================================================"
-echo "  WARNING: This will perform destructive operations on ${TARGET_SERVER}:"
-echo "================================================================================"
-echo "  - Remove remote directory: ${REMOTE_PROJECT_DIR}"
-echo ""
-echo "  The following will be deployed:"
-echo "  - Project code from: ${LOCAL_PROJECT_DIR}"
-echo "================================================================================"
-echo ""
+log ""
+log "================================================================================"
+log_warning "  WARNING: This will perform destructive operations on ${TARGET_SERVER}:"
+log "================================================================================"
+log "  - Remove remote directory: ${REMOTE_PROJECT_DIR}"
+log ""
+log "  The following will be deployed:"
+log "  - Project code from: ${LOCAL_PROJECT_DIR}"
+log "================================================================================"
+log ""
 read -p "Do you want to proceed? (yes/no): " confirmation
 if [ "$confirmation" != "yes" ]; then
-  echo "Deployment cancelled."
+  log_warning "Deployment cancelled."
   exit 0
 fi
-echo ""
+log ""
 
 # --- 0. Remote Preparation (远端准备工作) ---
 log "0. Preparing remote server..."
@@ -154,7 +154,7 @@ log_success "Project packaged [${ARCHIVE_SIZE}] - excluding shared/"
 # --- 2. Transfer Archive (传输归档文件) ---
 log ""
 log "2. Transferring archive to remote server..."
-echo "   Archive: ${ARCHIVE_SIZE}"
+log "   Archive: ${ARCHIVE_SIZE}"
 rsync -avh --progress -e "ssh -i ${SSH_KEY_PATH}" "$LOCAL_PROJECT_ARCHIVE_PATH" "${TARGET_SERVER}:${REMOTE_PROJECT_ARCHIVE_PATH}"
 log_success "Archive transferred"
 
