@@ -45,6 +45,10 @@ WORKDIR /workspace
 COPY ./IsaacLab ${ISAACLAB_PATH}
 RUN chmod +x ${ISAACLAB_PATH}/isaaclab.sh
 RUN ln -sf ${ISAACSIM_PATH} ${ISAACLAB_PATH}/_isaac_sim
+
+ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ENV PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+ENV PIP_DEFAULT_TIMEOUT=100
 RUN ${ISAACLAB_PATH}/isaaclab.sh -p -m pip install --upgrade pip
 RUN ${ISAACLAB_PATH}/isaaclab.sh -i
 
