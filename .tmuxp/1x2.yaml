@@ -1,0 +1,9 @@
+session_name: 1x2
+windows:
+  - window_name: main
+    layout: tiled
+    panes:
+      - shell_command:
+          - cd /home/rec/server
+      - shell_command:
+          - cd /home/rec/server

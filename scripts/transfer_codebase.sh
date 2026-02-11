@@ -20,13 +20,10 @@ REMOTE_PROJECT_DIR="${REMOTE_PROJECT_DIR:-/home/zhw/framework/server/}"
 # SSH Key Configuration
 SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/id_rsa.pub}"
 
-# Local temporary directory
+# ======================================================================================
 LOCAL_TMP_DIR="${LOCAL_TMP_DIR:-${TMPDIR:-/tmp/}}"
-
-# Construct target server
 TARGET_SERVER="${REMOTE_USER}@${SERVER_IP}"
 
-# ======================================================================================
 
 # Source common logging functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

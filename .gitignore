@@ -63,6 +63,9 @@ _build
 **/logs/*
 **/recordings/*
 
+# Server logs
+server_logs
+
 # Pre-Trained Checkpoints
 /.pretrained_checkpoints/
 

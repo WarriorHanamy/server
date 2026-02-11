@@ -20,6 +20,11 @@ build-sim-ros2:
     --network=host \
     -t {{env_var("USER")}}-lab-main-sim5.1-ros2:{{TAG_NAME}} .
 
+build-server:
+    docker build -f docker/isaacsim5_ros2.dockerfile \
+    --network=host \
+    -t {{env_var("USER")}}-server:train-server-ali .
+
 
 run-sim:
     docker run --name {{env_var("USER")}}-lab-main-sim5.1-ros2:{{TAG_NAME}} \
@@ -109,3 +114,6 @@ sync-logs:
 # Create SSH tunnel for tensorboard (local_port remote_port server_ip)
 tb-local-tunnel local_port remote_port server_ip:
     ssh -N -L {{local_port}}:localhost:{{remote_port}} zhw@{{server_ip}}
+
+see-logs:
+    tensorboard --logdir=./server_logs/
