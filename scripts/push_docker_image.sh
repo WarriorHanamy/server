@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common/log_funcs.sh"
 
 # Configuration
-IMAGE_NAME="${IMAGE_NAME:-${USER}-lab2.3-sim5.1:train-server-ali}"
+IMAGE_NAME="${IMAGE_NAME:-${USER}-lab-main-sim5.1-ros2:train-server-ali}"
 
 if [ "$#" -lt 1 ]; then
   cat <<EOF

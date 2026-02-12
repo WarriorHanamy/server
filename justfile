@@ -23,11 +23,11 @@ build-sim-ros2:
 build-server:
     docker build -f docker/isaacsim5_ros2.dockerfile \
     --network=host \
-    -t {{env_var("USER")}}-server:train-server-ali .
+    -t {{env_var("USER")}}-lab-main-sim5.1-ros2:train-server-ali .
 
 
 run-sim:
-    docker run --name {{env_var("USER")}}-lab-main-sim5.1-ros2:{{TAG_NAME}} \
+    docker run --name {{env_var("USER")}}-server \
     -itd --privileged --gpus all --network host \
     --entrypoint bash \
     --runtime=nvidia \
@@ -52,7 +52,7 @@ run-sim:
     {{env_var("USER")}}-lab-main-sim5.1-ros2:{{TAG_NAME}}
 
 run-sim-ros2:
-    docker run --name {{env_var("USER")}}-lab-main-sim5.1-ros2:{{TAG_NAME}} \
+    docker run --name {{env_var("USER")}}-server \
     -itd --privileged --gpus all --network host \
     --entrypoint bash \
     --runtime=nvidia \
@@ -78,14 +78,14 @@ run-sim-ros2:
 
 
 exec-sim-ros2:
-    docker exec -it {{env_var("USER")}}-lab-main-sim5.1-ros2:{{TAG_NAME}} /bin/bash
+    docker exec -it {{env_var("USER")}}-server /bin/bash
 
 stop-sim-ros2:
-    docker stop {{env_var("USER")}}-lab-main-sim5.1-ros2:{{TAG_NAME}} || true && \
-    docker rm {{env_var("USER")}}-lab-main-sim5.1-ros2:{{TAG_NAME}} || true
+    docker stop {{env_var("USER")}}-server || true && \
+    docker rm {{env_var("USER")}}-server || true
 
 start-sim-ros2:
-    docker restart {{env_var("USER")}}-lab-main-sim5.1-ros2:{{TAG_NAME}}
+    docker restart {{env_var("USER")}}-server
 
 
 alias b := build-sim-ros2
