@@ -59,7 +59,7 @@
         },
         {
           "step": 5,
-          "description": "Add CLI entry point in drone_racer/scripts/ for model export with metadata"
+          "description": "Create CLI entry point in drone_racer/scripts/ for model export with metadata"
         }
       ],
       "acceptance-criteria": "Exported directory under drone_racer/exports/ contains ONNX model file and observation_metadata.yaml with model path and checksum",
@@ -400,7 +400,7 @@
       "test-plan": {
         "unit": [
           "All tests pass with pytest when run in drone_racer/test/observation_metadata/",
-          "Mock objects correctly simulate IsaacLab environment components"
+          "Mock objects correctly simulate IsaacLab environment components",
           "Tests validate exported YAML format and content"
         ],
         "integration": [],
@@ -469,7 +469,7 @@
       "test-plan": {
         "unit": [
           "All tests pass with pytest when run in vtol-interface/src/neural_manager/neural_inference/tests/deployment/",
-          "Mock data correctly simulates ROS messages and sensor data"
+          "Mock data correctly simulates ROS messages and sensor data",
           "Tests use existing conftest.py fixtures where applicable"
         ],
         "integration": [],
@@ -546,6 +546,178 @@
         "verification-before-completion"
       ],
       "complete": true
+    },
+    {
+      "task": "Export VtolHoverEnvCfg observation metadata",
+      "description": "Generate observation_metadata.yaml from VtolHoverEnvCfg using export_observation_metadata.py script for deployment compatibility.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Run export_observation_metadata.py with --task rec-Vtol-Hover argument"
+        },
+        {
+          "step": 2,
+          "description": "Verify generated YAML contains 4 features: to_target_b(3), grav_dir_b(3), ang_vel_b(3), last_action(4)"
+        },
+        {
+          "step": 3,
+          "description": "Verify total dimension equals 13 (3+3+3+4)"
+        }
+      ],
+      "acceptance-criteria": "observation_metadata.yaml generated in drone_racer with correct feature names matching VtolFeatureProvider methods. Total dimension equals 13.",
+      "test-plan": {
+        "unit": [
+          "Export script instantiates VtolHoverEnvCfg and extracts low_dim observations",
+          "Export script correctly calculates feature dimensions from observation_manager",
+          "Generated YAML file is valid and parseable with yaml.safe_load"
+        ],
+        "integration": [
+          "observation_metadata.yaml loads successfully without errors",
+          "VtolFeatureProvider initializes with exported metadata and validates all features"
+        ],
+        "e2e-manual": []
+      },
+      "skills": [],
+      "complete": true
+    },
+    {
+      "task": "Run tiny_train validation for VtolHoverEnvCfg",
+      "description": "Execute tiny_train.py script to validate VtolHoverEnvCfg environment and catch bugs before full training.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Run ./project_bins/python_entry_point scripts/rec/tiny_train.py --task rec-Vtol-Hover"
+        },
+        {
+          "step": 2,
+          "description": "Verify all 9 validation checks pass (environment creation, reset, step, training)"
+        },
+        {
+          "step": 3,
+          "description": "Confirm observation dimensions match expected 13 and no NaN/Inf detected"
+        }
+      ],
+      "acceptance-criteria": "tiny_train completes with exit code 0. All validation checks pass. Training completes 5 iterations without errors.",
+      "test-plan": {
+        "unit": [],
+        "integration": [
+          "Environment creates successfully with VtolHoverEnvCfg",
+          "Initial reset returns valid observations without NaN/Inf",
+          "Environment step completes without crashes",
+          "Training runner completes 5 iterations"
+        ],
+        "e2e-manual": [
+          "Visual confirmation that tiny_train output shows all PASS indicators",
+          "Training loop completes within 120s timeout"
+        ]
+      },
+      "skills": [],
+      "complete": true
+    },
+    {
+      "task": "Create ONNX export configuration for hover task",
+      "description": "Configure export_model_with_metadata.py for VtolHover task with correct input dimensions and metadata.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Set num_obs=13 from observation_metadata.yaml total dimension"
+        },
+        {
+          "step": 2,
+          "description": "Set num_actions=4 (thrust, roll_rate, pitch_rate, yaw_rate)"
+        },
+        {
+          "step": 3,
+          "description": "Set model_name=vtol_hover and model_version=1.0.0"
+        }
+      ],
+      "acceptance-criteria": "Export configuration ready with num_obs=13, num_actions=4. Model name and version set correctly.",
+      "test-plan": {
+        "unit": [
+          "Configuration parser accepts --num-obs 13 and --num-actions 4 arguments",
+          "Model name defaults to 'vtol_hover' when not specified",
+          "Sample input tensor has shape (1, 13)"
+        ],
+        "integration": [],
+        "e2e-manual": []
+      },
+      "skills": [],
+      "complete": true
+    },
+    {
+      "task": "Create tiny integration test for hover pipeline",
+      "description": "Create test script validating metadata compatibility between training export and deployment for VtolHover task.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create test script in drone_racer/test/integration/ that loads observation_metadata.yaml"
+        },
+        {
+          "step": 2,
+          "description": "Import VtolFeatureProvider from vtol-interface and initialize with metadata"
+        },
+        {
+          "step": 3,
+          "description": "Verify all feature names are registered (to_target_b, grav_dir_b, ang_vel_b, last_action)"
+        },
+        {
+          "step": 4,
+          "description": "Verify feature dimensions match (3, 3, 3, 4)"
+        },
+        {
+          "step": 5,
+          "description": "Test that total observation dimension equals 13"
+        }
+      ],
+      "acceptance-criteria": "Integration test passes. VtolFeatureProvider validates all 4 features from exported metadata. Total dimension equals 13.",
+      "test-plan": {
+        "unit": [
+          "Test loads observation_metadata.yaml from drone_racer directory",
+          "Test initializes VtolFeatureProvider without errors",
+          "Test verifies each feature has corresponding get_{name} method"
+        ],
+        "integration": [
+          "VtolFeatureProvider initialization with drone_racer metadata succeeds",
+          "Feature validation report shows 4/4 features pass"
+        ],
+        "e2e-manual": []
+      },
+      "skills": ["testing-safe-protocol"],
+      "complete": true
+    },
+    {
+      "task": "Sync repository to remote",
+      "description": "Commit and push all changes including observation_metadata.yaml, export scripts, and integration tests.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Run git status to review all changes"
+        },
+        {
+          "step": 2,
+          "description": "Stage relevant files (observation_metadata.yaml, integration test script, export configs)"
+        },
+        {
+          "step": 3,
+          "description": "Create commit with descriptive message about VtolHover pipeline"
+        },
+        {
+          "step": 4,
+          "description": "Push changes to remote repository"
+        }
+      ],
+      "acceptance-criteria": "Repository synced to remote. All pipeline components committed and pushed.",
+      "test-plan": {
+        "unit": [],
+        "integration": [],
+        "e2e-manual": [
+          "Git status shows clean working directory after push",
+          "Remote repository contains new observation_metadata.yaml for VtolHover",
+          "Remote repository contains integration test script"
+        ]
+      },
+      "skills": [],
+      "complete": false
     }
   ]
 }
