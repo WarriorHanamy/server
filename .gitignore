@@ -87,3 +87,6 @@ datasets
 
 # Task progress files
 PROGRESS.txt
+
+# Python virtual environment
+.venv/

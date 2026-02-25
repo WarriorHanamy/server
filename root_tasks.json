@@ -1,0 +1,551 @@
+{
+  "tasks": [
+    {
+      "task": "Implement ObservationMetadataExporter",
+      "description": "Create utility to export observation metadata from IsaacLab environment configuration",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create ObservationMetadata dataclass with name and dim fields in drone_racer/tools/"
+        },
+        {
+          "step": 2,
+          "description": "Implement export_observation_metadata() function to extract features from env_cfg.observations"
+        },
+        {
+          "step": 3,
+          "description": "Add YAML serialization to output observation_metadata.yaml format with only name and dim fields"
+        },
+        {
+          "step": 4,
+          "description": "Create CLI entry point in drone_racer/scripts/ for metadata export"
+        }
+      ],
+      "acceptance-criteria": "ObservationMetadataExporter can parse IsaacLab env_cfg and generate YAML with feature names and dimensions only",
+      "test-plan": {
+        "unit": [
+          "ObservationMetadataExporter extracts feature names and dimensions from mock env_cfg.observations",
+          "Exported YAML contains exactly 'features' list with 'name' and 'dim' fields only",
+          "YAML output is valid and matches expected format"
+        ],
+        "integration": [],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "systematic-debugging"
+      ],
+      "complete": true
+    },
+    {
+      "task": "Implement ModelWithMetadataExporter",
+      "description": "Export ONNX model with associated observation metadata including model path and checksum",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create ModelMetadata dataclass with name, version, path, checksum, input_shape, output_shape in drone_racer/tools/"
+        },
+        {
+          "step": 2,
+          "description": "Implement export_model_with_metadata() function combining ONNX export and metadata generation in drone_racer/tools/"
+        },
+        {
+          "step": 3,
+          "description": "Add MD5 checksum calculation for exported ONNX model file using hashlib"
+        },
+        {
+          "step": 4,
+          "description": "Create output directory structure with model file and observation_metadata.yaml in same location under drone_racer/exports/"
+        },
+        {
+          "step": 5,
+          "description": "Add CLI entry point in drone_racer/scripts/ for model export with metadata"
+        }
+      ],
+      "acceptance-criteria": "Exported directory under drone_racer/exports/ contains ONNX model file and observation_metadata.yaml with model path and checksum",
+      "test-plan": {
+        "unit": [
+          "ModelWithMetadataExporter generates valid ONNX model file",
+          "Exported YAML contains 'model' section with path pointing to ONNX file",
+          "Exported YAML contains checksum matching MD5 of exported ONNX file",
+          "Export directory contains both model and metadata files"
+        ],
+        "integration": [],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "systematic-debugging"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Implement FeatureProviderBase",
+      "description": "Create base class with auto-validation and convention-based feature discovery in vtol-interface/src/features/",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create features/__init__.py and feature_provider_base.py in vtol-interface/src/features/"
+        },
+        {
+          "step": 2,
+          "description": "Create FeatureSpec dataclass with name, dim, dtype, description fields"
+        },
+        {
+          "step": 3,
+          "description": "Create FeatureValidationResult dataclass for validation reporting"
+        },
+        {
+          "step": 4,
+          "description": "Implement FeatureProviderBase class with _load_metadata() to parse observation_metadata.yaml"
+        },
+        {
+          "step": 5,
+          "description": "Implement _validate_implementations() with convention discovery (get_{feature_name})"
+        },
+        {
+          "step": 6,
+          "description": "Implement _print_validation_report() with clear pass/fail indicators using print"
+        },
+        {
+          "step": 7,
+          "description": "Implement get_all_features() to concatenate all features in metadata order"
+        },
+        {
+          "step": 8,
+          "description": "Implement get_feature() to retrieve single feature by name with error checking"
+        },
+        {
+          "step": 9,
+          "description": "Implement get_validation_report() for programmatic access to validation results"
+        }
+      ],
+      "acceptance-criteria": "FeatureProviderBase validates all features from metadata and reports clear validation status at initialization",
+      "test-plan": {
+        "unit": [
+          "FeatureProviderBase loads metadata from valid observation_metadata.yaml",
+          "_validate_implementations() detects missing get_{feature_name}() methods",
+          "_validate_implementations() validates method has no parameters except self",
+          "get_all_features() returns numpy array matching total dimension from metadata",
+          "get_feature() raises ValueError for unknown feature names",
+          "Validation report shows clear pass/fail status for each feature"
+        ],
+        "integration": [],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "systematic-debugging"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Implement ModelDiscoverer",
+      "description": "Create auto-discovery system to find and load ONNX models from search paths in vtol-interface/src/neural_manager/",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create model_discovery.py in vtol-interface/src/neural_manager/"
+        },
+        {
+          "step": 2,
+          "description": "Implement ModelDiscoverer class with configurable search paths"
+        },
+        {
+          "step": 3,
+          "description": "Implement _find_metadata_file() with multiple search strategies (task-specific and default)"
+        },
+        {
+          "step": 4,
+          "description": "Implement discover_and_load() to auto-discover model and metadata"
+        },
+        {
+          "step": 5,
+          "description": "Implement _verify_checksum() for optional model integrity validation using hashlib.md5"
+        },
+        {
+          "step": 6,
+          "description": "Implement list_available_models() to scan all search paths for metadata files"
+        }
+      ],
+      "acceptance-criteria": "ModelDiscoverer automatically finds and loads ONNX models without manual path specification using standard search paths",
+      "test-plan": {
+        "unit": [
+          "ModelDiscoverer finds observation_metadata.yaml in default search paths",
+          "discover_and_load() loads ONNX model when metadata path is found",
+          "discover_and_load() raises FileNotFoundError when no metadata found",
+          "discover_and_load() raises FileNotFoundError when model file referenced in metadata does not exist",
+          "_verify_checksum() returns True for matching checksums and False otherwise"
+        ],
+        "integration": [],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "systematic-debugging"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Implement VtolFeatureProvider",
+      "description": "Create platform-specific VTOL feature provider implementing get_to_target_b, get_grav_dir_b, get_ang_vel_b, get_last_action methods in vtol-interface/src/features/",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create vtol_feature_provider.py in vtol-interface/src/features/"
+        },
+        {
+          "step": 2,
+          "description": "Implement VtolFeatureProvider class inheriting from FeatureProviderBase"
+        },
+        {
+          "step": 3,
+          "description": "Implement sensor update methods: update_vehicle_odom(), update_imu(), update_target(), update_last_action()"
+        },
+        {
+          "step": 4,
+          "description": "Implement get_to_target_b() with NED->FRD->FLU coordinate transformations"
+        },
+        {
+          "step": 5,
+          "description": "Implement get_grav_dir_b() with gravity projection and normalization"
+        },
+        {
+          "step": 6,
+          "description": "Implement get_ang_vel_b() with FRD->FLU transformation"
+        },
+        {
+          "step": 7,
+          "description": "Implement get_last_action() returning buffered action vector"
+        },
+        {
+          "step": 8,
+          "description": "Implement helper methods _ned_to_frd() and _frd_to_flu() for coordinate conversions"
+        },
+        {
+          "step": 9,
+          "description": "Handle None returns gracefully when sensor data is unavailable"
+        }
+      ],
+      "acceptance-criteria": "VtolFeatureProvider implements all required get_{feature_name} methods matching metadata dimensions and returns None for unavailable sensor data",
+      "test-plan": {
+        "unit": [
+          "get_to_target_b() returns correct error vector for known position and target",
+          "get_to_target_b() returns None when vehicle_odom or target data is missing",
+          "get_to_target_b() output vector has dimension 3 matching metadata",
+          "get_grav_dir_b() returns normalized gravity direction vector with dimension 3",
+          "get_grav_dir_b() returns None when vehicle_odom data is missing",
+          "get_ang_vel_b() returns FRD->FLU transformed angular velocity with dimension 3",
+          "get_ang_vel_b() returns None when imu or odom data is missing",
+          "get_last_action() returns previously buffered action with dimension 4",
+          "get_last_action() returns None when no action has been buffered"
+        ],
+        "integration": [
+          "VtolFeatureProvider passes FeatureProviderBase validation for all implemented features"
+        ],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "systematic-debugging"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Implement VtolNeuralInferenceNode",
+      "description": "Create neural inference node integrating ModelDiscoverer and VtolFeatureProvider in vtol-interface/src/neural_manager/neural_inference/",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create vtol_inference_node.py in vtol-interface/src/neural_manager/neural_inference/"
+        },
+        {
+          "step": 2,
+          "description": "Initialize ModelDiscoverer with configurable search paths in constructor"
+        },
+        {
+          "step": 3,
+          "description": "Initialize VtolFeatureProvider with metadata from discovered model"
+        },
+        {
+          "step": 4,
+          "description": "Implement infer() method supporting single feature or all features"
+        },
+        {
+          "step": 5,
+          "description": "Handle None feature returns gracefully with zero-padding or error"
+        },
+        {
+          "step": 6,
+          "description": "Add method to list available models via ModelDiscoverer"
+        },
+        {
+          "step": 7,
+          "description": "Add task_name parameter to constructor for switching between different models"
+        }
+      ],
+      "acceptance-criteria": "VtolNeuralInferenceNode automatically discovers model and provides inference via infer() method with proper error handling",
+      "test-plan": {
+        "unit": [
+          "VtolNeuralInferenceNode successfully initializes with auto-discovered model",
+          "infer() returns action when all features are available",
+          "infer() raises appropriate error when requested feature is not implemented",
+          "infer(feature_name=None) returns concatenated observation vector",
+          "list_available_models() returns list of discoverable models"
+        ],
+        "integration": [
+          "VtolNeuralInferenceNode integrates with VtolFeatureProvider to get features",
+          "VtolNeuralInferenceNode integrates with ModelDiscoverer to load ONNX model"
+        ],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "systematic-debugging"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Integrate ROS sensor callbacks with VtolFeatureProvider",
+      "description": "Create ROS bridge connecting topics to VtolFeatureProvider sensor updates in vtol-interface/src/neural_manager/neural_inference/",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create ros_integration.py in vtol-interface/src/neural_manager/neural_inference/"
+        },
+        {
+          "step": 2,
+          "description": "Create RosSensorBridge class subscribing to odometry, IMU, GPS topics"
+        },
+        {
+          "step": 3,
+          "description": "Implement message parsing to extract position, orientation, velocity, angular_velocity from ROS messages"
+        },
+        {
+          "step": 4,
+          "description": "Map ROS message fields to VtolFeatureProvider update method calls"
+        },
+        {
+          "step": 5,
+          "description": "Add ROS node initialization with publishers and subscribers"
+        },
+        {
+          "step": 6,
+          "description": "Implement inference loop calling VtolNeuralInferenceNode.infer() at fixed rate (50 Hz)"
+        }
+      ],
+      "acceptance-criteria": "ROS subscribers update VtolFeatureProvider sensor data and inference loop generates control commands",
+      "test-plan": {
+        "unit": [
+          "RosSensorBridge correctly parses odometry message fields",
+          "RosSensorBridge correctly parses IMU message fields",
+          "RosSensorBridge correctly parses GPS message fields",
+          "Subscriber callbacks call VtolFeatureProvider update methods with correct arguments"
+        ],
+        "integration": [
+          "ROS bridge integrates with VtolNeuralInferenceNode",
+          "Inference loop generates actions from features provided by VtolFeatureProvider"
+        ],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "systematic-debugging",
+        "testing-safe-protocol"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Write training-side unit tests",
+      "description": "Create unit tests in drone_racer/test/observation_metadata/ for ObservationMetadataExporter and ModelWithMetadataExporter",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create test_observation_metadata_exporter.py in drone_racer/test/observation_metadata/"
+        },
+        {
+          "step": 2,
+          "description": "Write unit tests for ObservationMetadata dataclass with pytest"
+        },
+        {
+          "step": 3,
+          "description": "Write unit tests for ObservationMetadataExporter with mock env_cfg"
+        },
+        {
+          "step": 4,
+          "description": "Test YAML serialization matches expected format with only name and dim fields"
+        },
+        {
+          "step": 5,
+          "description": "Create test_model_exporter.py in drone_racer/test/observation_metadata/"
+        },
+        {
+          "step": 6,
+          "description": "Write unit tests for ModelWithMetadataExporter with mock policy and output dir"
+        },
+        {
+          "step": 7,
+          "description": "Test ONNX export generates valid model file"
+        },
+        {
+          "step": 8,
+          "description": "Test export directory contains model and metadata files"
+        },
+        {
+          "step": 9,
+          "description": "Test checksum calculation and validation using hashlib.md5"
+        }
+      ],
+      "acceptance-criteria": "Unit tests in drone_racer/test/observation_metadata/ cover all training-side export functionality with >80% code coverage",
+      "test-plan": {
+        "unit": [
+          "All tests pass with pytest when run in drone_racer/test/observation_metadata/",
+          "Mock objects correctly simulate IsaacLab environment components"
+          "Tests validate exported YAML format and content"
+        ],
+        "integration": [],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "verification-before-completion"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Write deployment-side unit tests",
+      "description": "Create unit tests in vtol-interface/src/neural_manager/neural_inference/tests/deployment/ for FeatureProviderBase, ModelDiscoverer, and VtolFeatureProvider",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create test_feature_provider_base.py in vtol-interface/src/neural_manager/neural_inference/tests/deployment/"
+        },
+        {
+          "step": 2,
+          "description": "Write unit tests for FeatureProviderBase validation logic with pytest"
+        },
+        {
+          "step": 3,
+          "description": "Test metadata loading from valid and invalid YAML files"
+        },
+        {
+          "step": 4,
+          "description": "Test auto-validation detects missing and invalid method implementations"
+        },
+        {
+          "step": 5,
+          "description": "Create test_model_discovery.py in vtol-interface/src/neural_manager/neural_inference/tests/deployment/"
+        },
+        {
+          "step": 6,
+          "description": "Write unit tests for ModelDiscoverer file discovery and loading with pytest"
+        },
+        {
+          "step": 7,
+          "description": "Test search strategies and path resolution"
+        },
+        {
+          "step": 8,
+          "description": "Test checksum validation functionality"
+        },
+        {
+          "step": 9,
+          "description": "Create test_vtol_feature_provider.py in vtol-interface/src/neural_manager/neural_inference/tests/deployment/"
+        },
+        {
+          "step": 10,
+          "description": "Write unit tests for VtolFeatureProvider feature calculations with mock sensor data using pytest"
+        },
+        {
+          "step": 11,
+          "description": "Test coordinate transformation helpers (_ned_to_frd, _frd_to_flu)"
+        },
+        {
+          "step": 12,
+          "description": "Test None return handling for unavailable sensor data"
+        }
+      ],
+      "acceptance-criteria": "Unit tests in vtol-interface/src/neural_manager/neural_inference/tests/deployment/ cover all deployment-side components with >80% code coverage",
+      "test-plan": {
+        "unit": [
+          "All tests pass with pytest when run in vtol-interface/src/neural_manager/neural_inference/tests/deployment/",
+          "Mock data correctly simulates ROS messages and sensor data"
+          "Tests use existing conftest.py fixtures where applicable"
+        ],
+        "integration": [],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "verification-before-completion"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Write end-to-end integration test",
+      "description": "Create integration test validating complete pipeline from training export through deployment inference",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create test_end_to_end_export.py in vtol-interface/src/neural_manager/neural_inference/tests/integration/"
+        },
+        {
+          "step": 2,
+          "description": "Create test export script using ObservationMetadataExporter and ModelWithMetadataExporter"
+        },
+        {
+          "step": 3,
+          "description": "Run export to generate ONNX model and observation_metadata.yaml in temporary directory"
+        },
+        {
+          "step": 4,
+          "description": "Initialize VtolNeuralInferenceNode with exported artifacts"
+        },
+        {
+          "step": 5,
+          "description": "Verify model auto-discovery finds exported model"
+        },
+        {
+          "step": 6,
+          "description": "Verify FeatureProviderBase validates all features from exported metadata"
+        },
+        {
+          "step": 7,
+          "description": "Verify VtolFeatureProvider implements all required get_{feature_name} methods"
+        },
+        {
+          "step": 8,
+          "description": "Test inference end-to-end with mock sensor data"
+        },
+        {
+          "step": 9,
+          "description": "Verify observation concatenation order matches metadata"
+        },
+        {
+          "step": 10,
+          "description": "Verify action generation from features"
+        }
+      ],
+      "acceptance-criteria": "Integration test in vtol-interface/src/neural_manager/neural_inference/tests/integration/ validates complete pipeline from training export through deployment inference",
+      "test-plan": {
+        "unit": [],
+        "integration": [
+          "Exported ONNX model loads successfully in deployment environment",
+          "Exported observation_metadata.yaml passes FeatureProviderBase validation",
+          "VtolFeatureProvider provides all features matching metadata",
+          "Inference produces action for given observation"
+        ],
+        "e2e-manual": [
+          "Inference loop runs without errors in test environment",
+          "Model discovery correctly locates exported artifacts"
+        ]
+      },
+      "skills": [
+        "tdd-workflow",
+        "systematic-debugging",
+        "verification-before-completion"
+      ],
+      "complete": false
+    }
+  ]
+}
