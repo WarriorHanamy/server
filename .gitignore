@@ -84,3 +84,6 @@ datasets
 
 .vscode/
 .zed/
+
+# Task progress files
+PROGRESS.txt
