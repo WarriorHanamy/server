@@ -479,7 +479,7 @@
         "tdd-workflow",
         "verification-before-completion"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Write end-to-end integration test",
@@ -545,7 +545,7 @@
         "systematic-debugging",
         "verification-before-completion"
       ],
-      "complete": false
+      "complete": true
     }
   ]
 }
