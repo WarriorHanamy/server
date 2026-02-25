@@ -13,3 +13,4 @@
 [submodule "vtol-interface"]
 	path = vtol-interface
 	url = https://github.com/WarriorHanamy/vtol-interface.git
+	branch = main
