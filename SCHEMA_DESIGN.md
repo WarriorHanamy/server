@@ -6,38 +6,50 @@ A schema-driven approach to ensure observation consistency between training (dro
 
 **Core Principle**: Schema is model metadata, not configuration. It travels with the ONNX model to guarantee matching.
 
+- `schema.yaml` originates from training. The export step that produces
+  `policy.onnx` also serializes the observation contract directly from the
+  IsaacLab config so deployment never edits this file.
+- `feature_registry.yaml` lives in the deployment repo and is loaded before
+  inference. It declares the canonical feature functions that may satisfy the
+  schema.
+- Observation assembly in deployment is a functional transform pipeline defined
+  by registry entries. The composer chains pure transforms to build each
+  feature vector and then appends `last_action`.
+
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     drone_racer (Training)                      │
-├─────────────────────────────────────────────────────────────────┤
-│  Observation Config (free to iterate)                           │
-│       ↓                                                         │
-│  Training → checkpoint.pt                                       │
-│       ↓                                                         │
-│  export_onnx.py                                                 │
-│       ├── policy.onnx                                           │
-│       └── schema.yaml  (auto-generated: name + dim only)        │
-└─────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼ Package to models/
-┌─────────────────────────────────────────────────────────────────┐
-│                   vtol-interface (Deployment)                   │
-├─────────────────────────────────────────────────────────────────┤
-│  1. Register feature functions in Registry                      │
-│       ↓                                                         │
-│  2. Load models/hover_v1/policy.onnx + schema.yaml              │
-│       ↓                                                         │
-│  3. Validate: all features registered + dimensions match        │
-│       ↓                                                         │
-│  4. Create Composer from schema                                 │
-│       ↓                                                         │
-│  5. Pipeline: obs = composer.compute(state) + last_action       │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                       drone_racer (Training)                        │
+├────────────────────────────────────────────────────────────────────┤
+│  Observation Config (iterates freely)                               │
+│       ↓                                                             │
+│  Training → checkpoint.pt                                           │
+│       ↓                                                             │
+│  export_onnx.py / schema_writer.py                                  │
+│       ├── policy.onnx                                               │
+│       └── schema.yaml  (auto-generated from training config)        │
+└────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ Package artifacts to models/
+┌────────────────────────────────────────────────────────────────────┐
+│                     vtol-interface (Deployment)                     │
+├────────────────────────────────────────────────────────────────────┤
+│  feature_registry.yaml (versioned in repo)                          │
+│       ↓ load registry + transforms                                 │
+│  Load policy.onnx + schema.yaml                                    │
+│       ↓ validate(schema ↔ registry ↔ ONNX input)                   │
+│  Build functional pipeline from registry entries                   │
+│       ↓                                                             │
+│  obs = pipeline.compute(state) + last_action                       │
+└────────────────────────────────────────────────────────────────────┘
 ```
+
+The architecture explicitly separates artifact ownership: training emits the
+schema, while deployment maintains the feature registry and transform
+implementations.
 
 ---
 
@@ -79,18 +91,88 @@ features:
 | `name`    | string | Feature name (must match registry) |
 | `dim`     | int    | Feature dimension              |
 
+## Feature Registry Format
+
+`feature_registry.yaml` is deployment-owned metadata. It is versioned alongside
+the inference code, loaded before any model executes, and maps schema feature
+names to canonical functional pipelines.
+
+```yaml
+# models/hover_v1/feature_registry.yaml
+registry_version: 1
+features:
+  - name: target_error
+    entrypoint: neural_pos_ctrl.features.target_error
+    pipeline:
+      - transform: subtract_target
+        inputs: [position_ned, target_position_ned]
+      - transform: rotate_to_body
+        frame: flu
+  - name: gravity_projection
+    entrypoint: neural_pos_ctrl.features.gravity_projection
+    pipeline:
+      - transform: project_vector
+        inputs: [orientation_quat]
+  - name: angular_velocity
+    entrypoint: neural_pos_ctrl.features.angular_velocity
+    pipeline:
+      - transform: body_frame_passthrough
+        inputs: [angular_velocity_body]
+```
+
+### Registry Fields
+
+| Field             | Type   | Description |
+| ----------------- | ------ | ----------- |
+| `registry_version`| int    | Version for compatibility checks |
+| `features`        | list   | Entries keyed by schema `name` |
+| `entrypoint`      | string | Dotted import path to Python function implementing transforms |
+| `pipeline`        | list   | Ordered functional transforms applied to build the feature |
+| `inputs`          | list   | RobotState keys consumed by a transform |
+
+Each pipeline step is a pure function. The composer loads these definitions,
+creates the functional graph, and caches it so that observation assembly is only
+orchestrated, never reinvented, inside deployment.
+
 **No scale/clip**: Processing logic is encapsulated in registered feature functions.
 
 ---
 
 ## Responsibility Matrix
 
-| Component            | Responsibility                                    |
-| -------------------- | ------------------------------------------------- |
-| **Schema**             | Declares required features + dimensions (contract) |
-| **Feature Functions**  | Implement correct transforms, coordinate conversions |
-| **Composer**           | Assembles features in declared order              |
-| **Pipeline**           | Appends last_action, orchestrates inference       |
+| Component                        | Responsibility |
+| -------------------------------- | ------------- |
+| **schema.yaml (training)**       | Declares required features + dims; generated from observation config |
+| **feature_registry.yaml (deploy)** | Lists allowed features + entrypoints; stores transform sequences for deployment |
+| **Feature Functions**            | Implement pure transforms referenced by registry entrypoints |
+| **Functional Pipeline**          | Ordered composition assembling feature vectors from RobotState |
+| **Composer**                     | Aligns schema order, executes pipelines, then appends `last_action` |
+
+## Functional Composition Pipeline
+
+Observation assembly in deployment never mutates the schema. Instead it steps
+through a deterministic functional pipeline:
+
+1. Load `feature_registry.yaml` and import the declared transform entrypoints.
+2. Build a directed acyclic graph where each node is a pure transform function
+   (e.g., subtract target, rotate frame, normalize angle).
+3. Execute transforms in order to materialize each feature vector, stitch those
+   vectors following the schema order, and finally append `last_action`.
+
+```
+RobotState
+   │
+   ├─ subtract_target ─┐
+   │                   ▼
+   └─ rotate_to_body → target_error (3D)
+                               │
+                               ├─ concat → Observation (N)
+                               ▼
+                         gravity_projection (3D)
+```
+
+Because every step is purely functional, the registry can be validated offline
+and replayed deterministically at runtime.
 
 ---
 
@@ -135,13 +217,16 @@ models/hover_v1/
 ```
 models/hover_v1/
 ├── policy.onnx
-└── schema.yaml
+├── schema.yaml
+└── feature_registry.yaml
        │
        ▼
 ┌──────────────────────────────┐
-│ 1. Load schema.yaml          │
-│ 2. Validate against registry │
-│ 3. Create Composer           │
+│ 1. Load feature_registry.yaml│
+│ 2. Import transforms         │
+│ 3. Load schema.yaml          │
+│ 4. Validate (schema ↔ registry ↔ ONNX) │
+│ 5. Create functional pipelines│
 └──────────────────────────────┘
        │
        ▼ Runtime
@@ -155,7 +240,7 @@ models/hover_v1/
 │   - target_yaw               │
 └──────────────────────────────┘
        │
-       ▼ composer.compute(state)
+       ▼ functional pipeline
 ┌──────────────────────────────┐
 │ Observation Vector (9D)      │
 │   [target_error (3),         │
@@ -322,7 +407,8 @@ server/
 │       └── models/
 │           └── hover_v1/
 │               ├── policy.onnx     # Model file
-│               └── schema.yaml     # Schema file
+│               ├── schema.yaml     # Output of training export
+│               └── feature_registry.yaml  # Deployment-owned registry
 │
 └── SCHEMA_DESIGN.md                # This document
 ```
@@ -365,6 +451,31 @@ features:
     dim: 3
 ```
 
+### Feature Registry (Deployment)
+
+```yaml
+# models/hover_v1/feature_registry.yaml
+registry_version: 1
+features:
+  - name: target_error
+    entrypoint: neural_pos_ctrl.features.target_error
+    pipeline:
+      - transform: subtract_target
+        inputs: [position_ned, target_position_ned]
+      - transform: rotate_to_body
+        frame: flu
+  - name: gravity_projection
+    entrypoint: neural_pos_ctrl.features.gravity_projection
+    pipeline:
+      - transform: project_vector
+        inputs: [orientation_quat]
+  - name: angular_velocity
+    entrypoint: neural_pos_ctrl.features.angular_velocity
+    pipeline:
+      - transform: body_frame_passthrough
+        inputs: [angular_velocity_body]
+```
+
 ### Deployment Config (vtol-interface)
 
 ```yaml
@@ -372,6 +483,7 @@ features:
 model:
   path: "${oc.env:INFER_WORKSPACE}/src/neural_manager/neural_pos_ctrl/models/hover_v1/policy.onnx"
   schema_path: "${oc.env:INFER_WORKSPACE}/src/neural_manager/neural_pos_ctrl/models/hover_v1/schema.yaml"
+  feature_registry_path: "${oc.env:INFER_WORKSPACE}/src/neural_manager/neural_pos_ctrl/models/hover_v1/feature_registry.yaml"
   actor_type: "mlp"
   # ... other config
 ```
@@ -385,6 +497,10 @@ Before model deployment:
 - [ ] All feature names in schema are registered in `ObservationRegistry`
 - [ ] Sum of feature dimensions + 4 (last_action) equals `total_dim`
 - [ ] `total_dim` matches ONNX model input dimension
+- [ ] `feature_registry.yaml` exists for the model and lists every schema
+      feature with a valid functional pipeline definition
+- [ ] Registry entrypoints resolve to pure functions and import without side
+      effects
 - [ ] Feature functions produce correct coordinate transforms (FLU body frame)
 
 ---
