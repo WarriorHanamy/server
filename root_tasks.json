@@ -77,7 +77,7 @@
         "tdd-workflow",
         "systematic-debugging"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Implement FeatureProviderBase",
@@ -137,7 +137,7 @@
         "tdd-workflow",
         "systematic-debugging"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Implement ModelDiscoverer",
@@ -184,7 +184,7 @@
         "tdd-workflow",
         "systematic-debugging"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Implement VtolFeatureProvider",
@@ -249,7 +249,7 @@
         "tdd-workflow",
         "systematic-debugging"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Implement VtolNeuralInferenceNode",
@@ -303,7 +303,7 @@
         "tdd-workflow",
         "systematic-debugging"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Integrate ROS sensor callbacks with VtolFeatureProvider",
@@ -353,7 +353,7 @@
         "systematic-debugging",
         "testing-safe-protocol"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Write training-side unit tests",
@@ -410,7 +410,7 @@
         "tdd-workflow",
         "verification-before-completion"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Write deployment-side unit tests",
