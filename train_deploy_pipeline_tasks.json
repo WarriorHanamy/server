@@ -1,0 +1,199 @@
+{
+  "tasks": [
+    {
+      "task": "Define Standardized Export Directory Structure",
+      "description": "Create a standardized directory structure for exported policies that vtol-interface can discover by task type.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Define the export root directory as ~/policy_exports"
+        },
+        {
+          "step": 2,
+          "description": "Create subdirectories for each task type: hover, nav, track, collision_avoidance"
+        },
+        {
+          "step": 3,
+          "description": "Document the mapping between experiment names and task directories"
+        }
+      ],
+      "acceptance-criteria": "Export directory structure exists with task subdirectories. Each task directory can contain model.onnx and observation_metadata.yaml files. Documentation clearly maps experiment names to task directories.",
+      "test-plan": {
+        "unit": [
+          "Standardized export directory structure correctly maps experiment names like 'vtol_hover' to 'hover' directory",
+          "Task directories include all supported task types: hover, nav, track, collision_avoidance"
+        ],
+        "integration": [],
+        "e2e-manual": []
+      },
+      "skills": ["setup-fresh-project", "verification-before-completion"],
+      "complete": false
+    },
+    {
+      "task": "Implement Automatic Post-Training Export Hook",
+      "description": "Add automatic ONNX export functionality to the training runner that triggers when training completes.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create a post-training export function that integrates with the RSL-RL runner"
+        },
+        {
+          "step": 2,
+          "description": "Implement task detection logic from experiment name to determine export directory"
+        },
+        {
+          "step": 3,
+          "description": "Integrate export hook into the main training loop completion"
+        }
+      ],
+      "acceptance-criteria": "Training automatically exports latest checkpoint to ONNX format when complete. Export function correctly identifies task type from experiment name. ONNX model and metadata are saved to the correct task directory.",
+      "test-plan": {
+        "unit": [
+          "Post-training export function correctly identifies task from experiment name patterns like 'vtol_hover' -> 'hover'",
+          "Export function handles unknown experiment names gracefully with appropriate error handling",
+          "Export function creates ONNX model with correct input/output shapes for different tasks"
+        ],
+        "integration": [
+          "Post-training export hook integrates with existing RSL-RL training runner without breaking existing functionality",
+          "Training completion triggers automatic export to correct task directory"
+        ],
+        "e2e-manual": []
+      },
+      "skills": ["tdd-workflow", "testing-safe-protocol"],
+      "complete": false
+    },
+    {
+      "task": "Enhance Observation Metadata Export Integration",
+      "description": "Integrate observation metadata extraction with the trained model environment to create complete metadata files.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Modify the export pipeline to extract observation metadata from the actual trained environment"
+        },
+        {
+          "step": 2,
+          "description": "Ensure metadata includes both model info and observation feature definitions in single file"
+        },
+        {
+          "step": 3,
+          "description": "Add task-specific metadata fields including task name and policy version"
+        }
+      ],
+      "acceptance-criteria": "Observation metadata YAML includes complete feature definitions with names and dimensions. Metadata contains task identification and policy version information. Export works with actual trained model environments.",
+      "test-plan": {
+        "unit": [
+          "Enhanced metadata exporter produces YAML with both model metadata and observation features",
+          "Task-specific metadata includes correct task name derived from environment configuration",
+          "Observation feature extraction works with actual IsaacLab environment configurations"
+        ],
+        "integration": [
+          "Enhanced metadata exporter integrates with post-training export pipeline",
+          "Combined metadata file contains all information needed by vtol-interface"
+        ],
+        "e2e-manual": []
+      },
+      "skills": ["tdd-workflow", "testing-safe-protocol"],
+      "complete": false
+    },
+    {
+      "task": "Implement Latest Policy Management System",
+      "description": "Create a system that maintains only the latest policy for each task and handles versioning.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Implement cleanup logic to remove old policy files before saving new ones"
+        },
+        {
+          "step": 2,
+          "description": "Add version tracking using timestamps or iteration numbers"
+        },
+        {
+          "step": 3,
+          "description": "Create backup mechanism for previous versions before overwriting"
+        }
+      ],
+      "acceptance-criteria": "Each task directory contains only the latest policy files. Previous versions are optionally backed up. Version information is included in metadata. Old files are cleaned up automatically.",
+      "test-plan": {
+        "unit": [
+          "Latest policy management correctly removes old files before saving new ones",
+          "Version tracking includes meaningful identifiers like timestamps or iteration numbers",
+          "Backup mechanism preserves previous versions when enabled"
+        ],
+        "integration": [
+          "Latest policy management integrates with post-training export pipeline",
+          "vtol-interface can reliably discover the latest policy for each task"
+        ],
+        "e2e-manual": []
+      },
+      "skills": ["tdd-workflow", "testing-safe-protocol"],
+      "complete": false
+    },
+    {
+      "task": "Configure vtol-interface Model Discovery Integration",
+      "description": "Update vtol-interface to use the standardized export directory for model discovery.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Configure ModelDiscoverer search paths to include ~/policy_exports/"
+        },
+        {
+          "step": 2,
+          "description": "Test task-specific discovery (e.g., discover_and_load('hover'))"
+        },
+        {
+          "step": 3,
+          "description": "Verify compatibility with existing export format and metadata structure"
+        }
+      ],
+      "acceptance-criteria": "vtol-interface ModelDiscoverer can find models in ~/policy_exports/ directory. Task-specific discovery works correctly for all supported tasks. Backward compatibility maintained with existing deployment setup.",
+      "test-plan": {
+        "unit": [
+          "ModelDiscoverer search paths include ~/policy_exports/ directory",
+          "Task-specific discovery finds models in task subdirectories like ~/policy_exports/hover/"
+        ],
+        "integration": [
+          "vtol-interface successfully loads and validates models from new export directory structure",
+          "End-to-end inference works with automatically exported policies"
+        ],
+        "e2e-manual": [
+          "Manual verification that vtol-interface can discover and load latest policies for different tasks"
+        ]
+      },
+      "skills": ["tdd-workflow", "testing-safe-protocol"],
+      "complete": false
+    },
+    {
+      "task": "Create End-to-End Integration Test Suite",
+      "description": "Develop comprehensive integration tests that validate the complete train-to-deploy pipeline.",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Create test that simulates complete training and export cycle"
+        },
+        {
+          "step": 2,
+          "description": "Implement validation of exported ONNX model and metadata"
+        },
+        {
+          "step": 3,
+          "description": "Test vtol-interface discovery and inference with exported artifacts"
+        }
+      ],
+      "acceptance-criteria": "Integration test covers complete pipeline from training through vtol-interface inference. Test validates ONNX model correctness, metadata completeness, and task-specific discovery. All tests pass consistently.",
+      "test-plan": {
+        "unit": [
+          "Integration test suite covers all task types: hover, nav, track, collision_avoidance"
+        ],
+        "integration": [
+          "End-to-end test validates complete train-to-deploy pipeline functionality",
+          "Exported artifacts are validated for ONNX compliance and metadata correctness"
+        ],
+        "e2e-manual": [
+          "Manual verification that the complete pipeline works in real Docker training environment"
+        ]
+      },
+      "skills": ["tdd-workflow", "testing-safe-protocol", "verification-before-completion"],
+      "complete": false
+    }
+  ]
+}
