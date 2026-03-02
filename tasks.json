@@ -27,7 +27,7 @@
         "e2e-manual": []
       },
       "skills": ["setup-fresh-project", "verification-before-completion"],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Implement Automatic Post-Training Export Hook",
