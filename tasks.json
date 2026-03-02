@@ -1,0 +1,215 @@
+{
+  "tasks": [
+    {
+      "task": "Define Export Artifact Contract",
+      "description": "Create a training-side artifact contract that writes ONNX plus observations metadata into a revisioned task directory.",
+      "project-dir": "/home/rec/server/drone_racer",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Define revision format using commit, task, UTC timestamp, hash suffix."
+        },
+        {
+          "step": 2,
+          "description": "Create artifact layout spec for policies task revision directories."
+        },
+        {
+          "step": 3,
+          "description": "Implement writer logic that emits model.onnx plus observations_metadata.yaml."
+        },
+        {
+          "step": 4,
+          "description": "Add schema checks for name plus dim fields in observation entries."
+        }
+      ],
+      "acceptance-criteria": "Revision directory names must match commit-task-timestamp-hash convention. Export output must contain model.onnx plus observations_metadata.yaml inside policies/<task>/<revision>/. Observations metadata entries must only include name plus dim fields. Export path handling must support a shared directory located outside this repository.",
+      "test-plan": {
+        "unit": [
+          "Given commit abcdef12, task vtol_hover, UTC timestamp 20260302T143015Z, revision generator returns deterministic suffix for identical input.",
+          "Given an observation list with valid name plus dim fields, schema validator returns pass with zero normalization changes.",
+          "Given an observation item missing dim, schema validator raises a structured validation error.",
+          "Given target path policies/vtol_hover/<revision>/, writer creates directories plus both required files when parent exists."
+        ],
+        "integration": [],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "testing-safe-protocol"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Attach Post Training Export Hook",
+      "description": "Integrate training completion flow with artifact export so each finished run publishes one revision package.",
+      "project-dir": "/home/rec/server/drone_racer",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Invoke export hook on normal completion callback path."
+        },
+        {
+          "step": 2,
+          "description": "Invoke export hook on early stop callback path."
+        },
+        {
+          "step": 3,
+          "description": "Pass resolved task name plus common root location into exporter."
+        },
+        {
+          "step": 4,
+          "description": "Record failure logs without blocking training shutdown sequence."
+        }
+      ],
+      "acceptance-criteria": "Training completion must trigger exactly one export attempt per run. Early stopping completion must trigger the same export flow. Export errors must be logged while training termination still succeeds. Tests must execute from this repository via ./agent_bins/python without running pytest inside common_root_dir.",
+      "test-plan": {
+        "unit": [
+          "Using mocked exporter call, normal completion callback emits one invocation with task plus revision fields.",
+          "Using mocked exporter call, early stop callback emits one invocation with identical argument schema.",
+          "Using mocked exporter raising IOError, hook logs error message while callback returns without exception.",
+          "Using mocked run metadata, task detection maps known experiment prefix to expected task slug."
+        ],
+        "integration": [
+          "Connect hook with Task \"Define Export Artifact Contract\" writer, then verify real files appear under policies/<task>/<revision>/ for a finished run fixture.",
+          "Connect hook with Task \"Define Export Artifact Contract\" schema checks, then verify malformed observations metadata aborts export with explicit error log."
+        ],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "testing-safe-protocol",
+        "verification-before-completion"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Implement Latest Revision Discovery",
+      "description": "Add deployment-side discovery that selects the newest valid policy revision for a requested task from shared artifacts.",
+      "project-dir": "/home/rec/server/vtol-interface",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Scan policies task directory for revision candidates."
+        },
+        {
+          "step": 2,
+          "description": "Parse commit-task-timestamp-hash naming into sortable fields."
+        },
+        {
+          "step": 3,
+          "description": "Filter candidates lacking model.onnx plus observations_metadata.yaml."
+        },
+        {
+          "step": 4,
+          "description": "Select newest valid candidate using timestamp ordering rule."
+        }
+      ],
+      "acceptance-criteria": "Discovery must read artifacts from shared policies/<task>/ directories without any helper code inside common_root_dir. Candidate selection must reject incomplete revisions missing model.onnx or observations_metadata.yaml. Selection logic must choose the highest UTC timestamp among valid revisions for the requested task. Tests must execute from this repository via ./agent_bins/python only.",
+      "test-plan": {
+        "unit": [
+          "Given mocked directory names with three timestamps, parser returns sortable datetime values plus rejects malformed names.",
+          "Given mocked candidate list where one item misses model.onnx, filter excludes that item from valid set.",
+          "Given mocked candidate list where one item misses observations_metadata.yaml, filter excludes that item from valid set.",
+          "Given mocked valid candidates across timestamps, selector returns newest timestamp entry deterministically."
+        ],
+        "integration": [
+          "Connect discovery with Task \"Attach Post Training Export Hook\" outputs, then discoverer resolves the latest revision generated by a training export fixture.",
+          "Connect discovery with real ModelDiscoverer loading path, then returned revision provides a loadable ONNX path."
+        ],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "testing-safe-protocol"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Enforce Observation Registry Compatibility",
+      "description": "Validate deployment feature registry against observations metadata names plus dimensions before enabling inference.",
+      "project-dir": "/home/rec/server/vtol-interface",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Load observations metadata from discovered revision path."
+        },
+        {
+          "step": 2,
+          "description": "Resolve provider methods for each metadata feature name."
+        },
+        {
+          "step": 3,
+          "description": "Compare produced vector length against declared dim per feature."
+        },
+        {
+          "step": 4,
+          "description": "Raise explicit startup error on missing feature or dimension mismatch."
+        }
+      ],
+      "acceptance-criteria": "Startup validation must fail fast when any metadata feature lacks a provider method. Startup validation must fail fast when provider output dimension differs from metadata dim. Validation must pass when all metadata entries map to callable providers with matching dimensions. Validation must consume the discovered revision metadata file instead of repository-local fallback files.",
+      "test-plan": {
+        "unit": [
+          "Using stub metadata list with known names plus dims, registry validator passes when mock provider returns matching vector lengths.",
+          "Using stub metadata list containing unknown feature name, registry validator raises missing method error naming that feature.",
+          "Using stub metadata list with dim 4 for last_action, registry validator raises mismatch when mock provider returns length 3.",
+          "Using stub metadata entries with only name plus dim keys, parser accepts schema without requiring dtype or description."
+        ],
+        "integration": [
+          "Connect validator with Task \"Implement Latest Revision Discovery\" selected revision, then startup path blocks inference for incompatible metadata fixtures.",
+          "Connect validator with real VtolFeatureProvider implementation, then startup path succeeds for compatible exported metadata fixtures from Task \"Attach Post Training Export Hook\"."
+        ],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "testing-safe-protocol",
+        "systematic-debugging"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Verify Cross Repo Contract Workflow",
+      "description": "Confirm the full training export to deployment discovery workflow using shared artifacts without executing tests in common_root_dir.",
+      "project-dir": "/home/rec/server/vtol-interface",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Prepare shared artifact fixture with two revisions for one task."
+        },
+        {
+          "step": 2,
+          "description": "Run deployment discovery plus compatibility validation against fixture data."
+        },
+        {
+          "step": 3,
+          "description": "Confirm newest compatible revision becomes selected policy source."
+        },
+        {
+          "step": 4,
+          "description": "Document operator checks for artifact freshness plus startup validation output."
+        }
+      ],
+      "acceptance-criteria": "End to end workflow should select newest compatible revision for a requested task from shared artifacts. Workflow must reject a newer incompatible revision while falling back to the newest compatible candidate. All automated tests must run inside drone_racer or vtol-interface repositories via each local ./agent_bins/python. No pytest invocation can target common_root_dir.",
+      "test-plan": {
+        "unit": [
+          "Given fixture with compatible older revision plus incompatible newer revision, selection policy returns compatible older revision after validator failure on newer item.",
+          "Given fixture with zero compatible revisions, orchestration returns explicit no compatible policy error."
+        ],
+        "integration": [
+          "Connect Task \"Attach Post Training Export Hook\" artifact structure with Task \"Implement Latest Revision Discovery\" scanner, then scanner locates both revisions from shared fixture root.",
+          "Connect Task \"Implement Latest Revision Discovery\" output with Task \"Enforce Observation Registry Compatibility\" validator, then inference startup result reflects compatibility verdict before model use."
+        ],
+        "e2e-manual": [
+          "Operator inspects shared policies tree after one training run then confirms one new revision directory includes model.onnx plus observations_metadata.yaml.",
+          "Operator launches deployment for task vtol_hover then confirms logs show selected revision id plus successful registry compatibility report.",
+          "Operator swaps metadata with deliberate dim mismatch then confirms deployment startup aborts with clear incompatibility message."
+        ]
+      },
+      "skills": [
+        "testing-safe-protocol",
+        "verification-before-completion"
+      ],
+      "complete": false
+    }
+  ]
+}
