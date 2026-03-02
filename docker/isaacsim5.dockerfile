@@ -49,7 +49,10 @@ RUN ln -sf ${ISAACSIM_PATH} ${ISAACLAB_PATH}/_isaac_sim
 ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ENV PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 ENV PIP_DEFAULT_TIMEOUT=100
-RUN ${ISAACLAB_PATH}/isaaclab.sh -p -m pip install --upgrade pip
+
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    ${ISAACLAB_PATH}/isaaclab.sh -p -m pip install --upgrade pip
+
 RUN ${ISAACLAB_PATH}/isaaclab.sh -i
 
 
@@ -101,13 +104,16 @@ RUN apt install just && \
     echo "alias j='just'" >> ${DOCKER_USER_HOME}/.bashrc
 
 
-RUN ${ISAACLAB_PATH}/isaaclab.sh -p -m pip install manifold3d
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    ${ISAACLAB_PATH}/isaaclab.sh -p -m pip install manifold3d
 
 RUN rm /workspace/isaaclab/_isaac_sim/kit/python/lib/python3.11/site-packages/rsl_rl_lib-3.1.2.dist-info/ -r && \
     rm /workspace/isaaclab/_isaac_sim/kit/python/lib/python3.11/site-packages/rsl_rl/ -r
 
 COPY ./rsl_rl /workspace/rsl_rl
-RUN cd /workspace/rsl_rl && \
+
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    cd /workspace/rsl_rl && \
     ${ISAACLAB_PATH}/isaaclab.sh -p -m pip install -e .
 
 RUN add-apt-repository ppa:maveonair/helix-editor && \

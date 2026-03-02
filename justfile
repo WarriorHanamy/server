@@ -11,17 +11,17 @@ echo-logs-dir:
     echo "SERVER_LOGS_DIR: {{SERVER_LOGS_DIR}}"
 
 build-sim:
-    docker build -f docker/isaacsim5.dockerfile \
+    DOCKER_BUILDKIT=1 docker build -f docker/isaacsim5.dockerfile \
     --network=host \
     -t {{env_var("USER")}}-lab-main-sim5.1:{{TAG_NAME}} .
 
 build-sim-ros2:
-    docker build -f docker/isaacsim5_ros2.dockerfile \
+    DOCKER_BUILDKIT=1 docker build --no-cache -f docker/isaacsim5_ros2.dockerfile \
     --network=host \
     -t {{env_var("USER")}}-lab-main-sim5.1-ros2:{{TAG_NAME}} .
 
 build-server:
-    docker build -f docker/isaacsim5_ros2.dockerfile \
+    DOCKER_BUILDKIT=1 docker build -f docker/isaacsim5_ros2.dockerfile \
     --network=host \
     -t {{env_var("USER")}}-lab-main-sim5.1-ros2:train-server-ali .
 
