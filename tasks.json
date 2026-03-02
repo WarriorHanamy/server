@@ -37,7 +37,7 @@
         "tdd-workflow",
         "testing-safe-protocol"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Attach Post Training Export Hook",
