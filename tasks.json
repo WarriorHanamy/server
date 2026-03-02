@@ -165,7 +165,7 @@
         "testing-safe-protocol",
         "systematic-debugging"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Verify Cross Repo Contract Workflow",
