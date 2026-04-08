@@ -1,6 +1,6 @@
 [submodule "drone_racer"]
 	path = drone_racer
 	url = https://github.com/WarriorHanamy/drone_racer.git
-[submodule "vtol-interface"]
-	path = vtol-interface
-	url = https://github.com/WarriorHanamy/vtol-interface.git
+[submodule "vtol_behavior_manager"]
+	path = vtol_behavior_manager
+	url = https://github.com/WarriorHanamy/vtol_behavior_manager.git
